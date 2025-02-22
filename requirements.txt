@@ -1,4 +1,4 @@
 requests
-matplotlib
+plotly
 scikit-learn
 gradio
