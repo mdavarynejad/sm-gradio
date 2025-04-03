@@ -81,12 +81,18 @@ apt install python3.10-venv
 ### Clone the package and install dependencies
 
 ```bash
-git clone https://github.com/mdavarynejad/DeepD.git
-cd DeepD
+git clone https://github.com/mdavarynejad/sm-gradio.git
+cd sm-gradio
 python3 -m venv venv
 source venv/bin/activate 
 pip install --upgrade pip 
 pip install -r requirements.txt
+```
+
+```bash
+pip install notebook
+jupyter notebook
+jupyter notebook --allow-root --no-browser --port=7861 --ip=0.0.0.0
 ```
 
 
