@@ -4,7 +4,7 @@
 
 This application provides a web interface built with Gradio for predicting stock market prices based on historical data. It allows users to select a stock ticker, granularity, prediction model, and other parameters to visualize historical data and future predictions.
 
-The application is designed to be deployed using Docker for containerization and Caddy as a reverse proxy for automatic HTTPS.
+The application is designed to be deployed using Docker for containerization and Nginx as a reverse proxy for automatic HTTPS via Certbot.
 
 **Technology Stack:**
 
@@ -13,7 +13,7 @@ The application is designed to be deployed using Docker for containerization and
 *   **Data Handling:** Pandas, Requests
 *   **Machine Learning:** Scikit-learn
 *   **Containerization:** Docker
-*   **Web Server/Reverse Proxy:** Caddy (for HTTPS)
+*   **Web Server/Reverse Proxy:** Nginx (with Certbot for HTTPS)
 *   **Code Quality:** pre-commit (for commit message linting)
 
 ## Prerequisites
@@ -23,27 +23,27 @@ Before you begin, ensure you have the following:
 *   **Git:** For cloning the repository.
 *   **Linux Server:** A server (e.g., Ubuntu 20.04+) where you will deploy the application. You need `sudo` access.
 *   **Docker:** Docker installed and running on the deployment server.
-*   **Domain Name:** A domain name (e.g., `your_domain.com`) pointed to your server's public IP address via DNS A record.
+*   **Domain Name:** A domain name (e.g., `y1d.dataqubed.io`) pointed to your server's public IP address via DNS A record.
 *   **(For Development):** Python 3.11+ and `pip`.
 
 ## Architecture Overview
 
 The production setup follows this flow:
 
-1.  **User Request:** The user accesses `https://your_domain.com`.
+1.  **User Request:** The user accesses `https://y1d.dataqubed.io`.
 2.  **DNS:** The domain resolves to the server's IP address.
-3.  **Caddy:** Caddy receives the request on port 443 (HTTPS). It automatically handles TLS certificate acquisition and termination (using Let's Encrypt).
-4.  **Reverse Proxy:** Caddy forwards the request internally to the application container running on port 7862.
+3.  **Nginx:** Nginx receives the request on port 443 (HTTPS). It handles TLS certificate termination (certificates managed by Certbot).
+4.  **Reverse Proxy:** Nginx forwards the request internally to the application container running on port 7862.
 5.  **Docker Container:** The container runs the Gradio application (`trader.py`).
 6.  **Gradio App:** The Python application processes the request and serves the web interface.
 
 ```mermaid
 graph LR
-    A[User] -->|HTTPS request| B(your_domain.com);
+    A[User] -->|HTTPS request| B(y1d.dataqubed.io);
     B -->|DNS Resolution| C(Server IP);
-    C -->|Port 443| D[Caddy Server];
+    C -->|Port 443| D[Nginx Server];
     D -->|Reverse Proxy| E[Docker Container: Port 7862];
-    E -->|Runs| F[Gradio App (trader.py)];
+    E -->|Runs| F["Gradio App (trader.py)"];
     F -->|Serves UI| D;
     D -->|HTTPS response| A;
 ```
@@ -74,10 +74,9 @@ cd sm-gradio
     # sudo usermod -aG docker $USER
     # newgrp docker # Requires logout/login or new shell
     ```
-*   **Configure Firewall:** Allow incoming traffic on ports 80 (for HTTP ACME challenge) and 443 (for HTTPS). Port 7862 does *not* need to be publicly open as Caddy accesses it internally.
+*   **Configure Firewall:** Allow incoming traffic on ports 80 (for HTTP ACME challenge) and 443 (for HTTPS). Port 7862 does *not* need to be publicly open as Nginx accesses it internally.
     ```bash
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
+    sudo ufw allow 'Nginx Full' # Allows both 80 and 443
     sudo ufw reload
     sudo ufw status
     ```
@@ -87,7 +86,7 @@ cd sm-gradio
 Use the provided Python script to build the Docker image and run the container in detached mode with an auto-restart policy.
 
 ```bash
-python run_docker.py
+python3 run_docker.py
 ```
 
 *   **What this script does:**
@@ -98,63 +97,72 @@ python run_docker.py
     *   Runs the container in detached mode (`-d`).
     *   Sets the restart policy to `unless-stopped`, so it restarts automatically.
     *   Maps port `7862` inside the container to port `7862` on the host server.
-    *   Mounts a host directory `/root/move_data` to `/workspace/move_data` inside the container. *(Note: The purpose of this volume is not immediately clear from the code and may need adjustment based on application needs).*
+    *   Mounts a host directory `/root/move_data` to `/workspace/move_data` inside the container. *(Note: Ensure this volume mount is necessary and the host path `/root/move_data` exists or adjust as needed).*
     *   *(Note: The script uses the names `move-app` and `move-app-container`. Consider updating the script and `Dockerfile` for names consistent with the repository, e.g., `sm-gradio`, if desired).*
 
-**4. Install Caddy**
+**4. Install Nginx**
 
-Install the Caddy web server on the host machine (not inside Docker).
+Install the Nginx web server on the host machine.
 
 ```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update
-sudo apt install caddy -y
+sudo apt-get update
+sudo apt-get install nginx -y
+sudo systemctl start nginx
+sudo systemctl enable nginx
 ```
 
-**5. Configure Caddy**
+**5. Configure Nginx Reverse Proxy**
 
-Create or edit the Caddy configuration file `/etc/caddy/Caddyfile`. Replace its contents with the following, substituting `your_domain.com` with your actual domain name:
+Create an Nginx server block configuration file for your domain. Replace `y1d.dataqubed.io` with your actual domain name in the commands and file content below.
 
-```caddyfile
-# /etc/caddy/Caddyfile
+*   **Copy the example configuration to your server:** First, copy the example configuration file from the repository (`nginx.conf.example`) to your server's Nginx sites-available directory. You might use `scp` or other methods. Then, rename it on the server:
+    ```bash
+    # Example using scp (run from your local machine):
+    # scp nginx.conf.example user@your_server_ip:/etc/nginx/sites-available/y1d.dataqubed.io
 
-your_domain.com {
-    # Enable compression
-    encode gzip zstd
+    # Or, if you cloned the repo on the server:
+    sudo cp nginx.conf.example /etc/nginx/sites-available/y1d.dataqubed.io
+    ```
+*   **Edit the configuration file:** Open the copied file on the server using `vim` and replace all instances of the placeholder `y1d.dataqubed.io` with your actual domain name.
+    ```bash
+    sudo vim /etc/nginx/sites-available/y1d.dataqubed.io
+    ```
+*   **Enable the site by creating a symbolic link:**
+    ```bash
+    sudo ln -s /etc/nginx/sites-available/y1d.dataqubed.io /etc/nginx/sites-enabled/
+    ```
+*   **Test the Nginx configuration:**
+    ```bash
+    sudo nginx -t
+    ```
+*   **Reload Nginx if the test is successful:**
+    ```bash
+    sudo systemctl reload nginx
+    ```
 
-    # Reverse proxy requests to the Gradio app container running on port 7862
-    reverse_proxy localhost:7862
-}
+**6. Install Certbot and Obtain SSL Certificate**
+
+Install Certbot and its Nginx plugin to automatically obtain and manage Let's Encrypt SSL certificates.
+
+```bash
+sudo apt-get install certbot python3-certbot-nginx -y
 ```
 
-*   **Explanation:**
-    *   `your_domain.com`: Tells Caddy which domain this configuration applies to. Caddy will automatically provision and renew HTTPS certificates for this domain using Let's Encrypt.
-    *   `encode gzip zstd`: Enables response compression.
-    *   `reverse_proxy localhost:7862`: Forwards incoming requests for `your_domain.com` to the application running on `localhost:7862` (which is the Docker container mapped to the host).
+Run Certbot, specifying your domain name. Follow the prompts. Certbot will automatically modify your Nginx configuration to enable HTTPS. (Replace `y1d.dataqubed.io` with your domain)
 
-**6. Start/Reload Caddy**
+```bash
+sudo certbot --nginx -d y1d.dataqubed.io
+```
 
-Apply the configuration and ensure Caddy is running.
+Certbot will also set up automatic renewal. You can test the renewal process with:
 
-*   **Reload configuration if Caddy is already running:**
-    ```bash
-    sudo systemctl reload caddy
-    ```
-*   **Start and enable Caddy if it's not running:**
-    ```bash
-    sudo systemctl start caddy
-    sudo systemctl enable caddy # Ensures Caddy starts on system boot
-    ```
-*   **Check Caddy status:**
-    ```bash
-    sudo systemctl status caddy
-    ```
+```bash
+sudo certbot renew --dry-run
+```
 
 **7. Verification**
 
-Wait a minute or two for Caddy to obtain the SSL certificate. Then, open your web browser and navigate to `https://your_domain.com`. You should see the Gradio application interface served securely over HTTPS.
+Wait a minute or two for DNS propagation if you just set up the domain. Then, open your web browser and navigate to `https://y1d.dataqubed.io` (replace with your domain). You should see the Gradio application interface served securely over HTTPS via Nginx.
 
 ## Development Setup
 
@@ -199,7 +207,7 @@ Now, before finalizing any commit, the hook will automatically check your commit
 
 **5. Run Locally**
 
-You can run the Gradio app directly for local testing (this will *not* use Docker or Caddy).
+You can run the Gradio app directly for local testing (this will *not* use Docker or Nginx).
 
 ```bash
 python trader.py
