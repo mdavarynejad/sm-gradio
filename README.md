@@ -79,6 +79,20 @@ sudo ufw reload
 apt install python3.10-venv
 ```
 
+### Commit Message Linting (Local)
+
+This project uses `pre-commit` to enforce the [Conventional Commits](https://www.conventionalcommits.org/) standard for commit messages locally. This helps maintain a consistent and readable commit history.
+
+To enable this check:
+
+1.  **Install dependencies:** Make sure you have run `pip install -r requirements.txt` (this installs `pre-commit`).
+2.  **Install the Git hook:** Run the following command once in your cloned repository:
+    ```bash
+    pre-commit install --hook-type commit-msg
+    ```
+
+Now, whenever you run `git commit`, the hook will automatically check your commit message format. If it doesn't comply with the Conventional Commits standard, the commit will be blocked, and you'll see an error message indicating the problem.
+
 ### Clone the package and install dependencies
 
 ```bash
