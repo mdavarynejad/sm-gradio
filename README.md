@@ -160,6 +160,47 @@ Certbot will also set up automatic renewal. You can test the renewal process wit
 sudo certbot renew --dry-run
 ```
 
+> **Important Note:** Certbot attempts to automatically modify your Nginx configuration. Occasionally, especially with complex existing files, it might not structure the final configuration correctly, potentially leading to redirect loops (like a 301 error even on HTTPS). 
+> After running Certbot, it's wise to inspect the configuration file (`sudo cat /etc/nginx/sites-enabled/y1d.dataqubed.io`). Ensure it looks similar to the structure below, with one block for HTTP redirects and a separate block for HTTPS handling the proxy pass. If it looks incorrect (e.g., SSL directives mixed into the port 80 block, or duplicate redirects), manually edit `/etc/nginx/sites-available/y1d.dataqubed.io` to match the correct structure, test with `sudo nginx -t`, and reload with `sudo systemctl reload nginx`.
+>
+> ```nginx
+> # Correct structure example:
+> server {
+>     listen 80;
+>     server_name y1d.dataqubed.io; # Your domain
+> 
+>     # Redirect HTTP to HTTPS (managed by Certbot)
+>     location / {
+>         # Certbot might adjust this part slightly
+>         return 301 https://$host$request_uri;
+>     }
+> }
+> 
+> server {
+>     listen 443 ssl http2; # Ensure listen 443 ssl is present
+>     server_name y1d.dataqubed.io; # Your domain
+> 
+>     # SSL configuration directives (managed by Certbot)
+>     ssl_certificate /etc/letsencrypt/live/y1d.dataqubed.io/fullchain.pem;
+>     ssl_certificate_key /etc/letsencrypt/live/y1d.dataqubed.io/privkey.pem;
+>     include /etc/letsencrypt/options-ssl-nginx.conf;
+>     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+> 
+>     location / {
+>         # Your proxy pass directives here
+>         proxy_pass http://localhost:7862; 
+>         proxy_set_header Host $host;
+>         proxy_set_header X-Real-IP $remote_addr;
+>         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+>         proxy_set_header X-Forwarded-Proto $scheme;
+>         proxy_http_version 1.1;
+>         proxy_set_header Upgrade $http_upgrade;
+>         proxy_set_header Connection "upgrade";
+>         proxy_read_timeout 86400;
+>     }
+> }
+> ```
+
 **7. Verification**
 
 Wait a minute or two for DNS propagation if you just set up the domain. Then, open your web browser and navigate to `https://y1d.dataqubed.io` (replace with your domain). You should see the Gradio application interface served securely over HTTPS via Nginx.
