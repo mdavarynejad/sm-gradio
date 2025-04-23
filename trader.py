@@ -9,7 +9,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
 from datetime import timedelta
-from data.data_handling import fetch_stock_data, add_lags
+from data.data_handling import fetch_stock_data, add_lags, get_url_dict
 
 
 def predict_stock_price(ticker, granularity, days, model_type, num_lags, lag_gap):
@@ -54,6 +54,8 @@ def predict_stock_price(ticker, granularity, days, model_type, num_lags, lag_gap
     fig.update_layout(title=f"{ticker} Price Prediction ({model_type})", template="plotly_white")
 
     return fig, equation
+
+url_dict = get_url_dict() # Define url_dict here
 
 with gr.Blocks() as demo:
     gr.Markdown("# 📈 Stock Market Prediction")

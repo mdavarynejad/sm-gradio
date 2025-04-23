@@ -69,6 +69,7 @@ docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 
 ```bash
 sudo ufw allow 7862/tcp
+sudo ufw allow 80/tcp && sudo ufw allow 443/tcp 
 sudo ufw reload
 ```
 
@@ -88,6 +89,37 @@ source venv/bin/activate
 pip install --upgrade pip 
 pip install -r requirements.txt
 ```
+
+```bash 
+python run_docker.py
+```
+
+Install Caddy on the Server: Install Caddy directly on your host server (not inside the Docker container)
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install caddy
+```
+
+Configure Caddy: Create or edit the Caddy configuration file, typically located at /etc/caddy/Caddyfile. Replace its contents with
+
+```caddyfile
+    y1d.dataqubed.io {
+        reverse_proxy localhost:7862
+    }
+```
+
+```bash
+# If Caddy is already running, reload the configuration:
+sudo systemctl reload caddy
+# If Caddy is not running, start and enable it:
+sudo systemctl start caddy
+sudo systemctl enable caddy # To start automatically on boot
+```
+
+
 
 ```bash
 pip install notebook
